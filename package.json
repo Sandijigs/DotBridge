@@ -1,0 +1,20 @@
+{
+  "name": "dotbridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DotBridge — Borrow stablecoins against DOT, send cross-chain as remittances. Built on Polkadot Hub.",
+  "workspaces": [
+    "packages/contracts",
+    "packages/frontend"
+  ],
+  "scripts": {
+    "contracts": "yarn workspace @dotbridge/contracts",
+    "frontend": "yarn workspace @dotbridge/frontend",
+    "test": "yarn workspace @dotbridge/contracts test",
+    "deploy:testnet": "yarn workspace @dotbridge/contracts deploy:testnet",
+    "dev": "yarn workspace @dotbridge/frontend dev"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

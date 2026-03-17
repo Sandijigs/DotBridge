@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.yarn/cache
+.pnp.*
+
+# Hardhat
+packages/contracts/artifacts/
+packages/contracts/cache/
+packages/contracts/typechain-types/
+packages/contracts/coverage/
+packages/contracts/coverage.json
+
+# Env files
+.env
+.env.local
+packages/contracts/.env
+
+# Deployments (keep structure, ignore actual deployment files except .gitkeep)
+packages/contracts/deployments/*.json
+
+# Frontend build
+packages/frontend/dist/
+packages/frontend/.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,28 @@
+{
+  "name": "@dotbridge/contracts",
+  "version": "1.0.0",
+  "description": "DotBridge smart contracts — Polkadot Hub EVM track",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test --network hardhat",
+    "test:verbose": "hardhat test --network hardhat --verbose",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network westend",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network polkadot",
+    "verify": "hardhat run scripts/verify.js --network westend",
+    "node": "hardhat node",
+    "coverage": "hardhat coverage",
+    "clean": "hardhat clean"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "hardhat": "^2.22.17",
+    "ethers": "^6.13.4",
+    "dotenv": "^16.4.5",
+    "chai": "^4.4.1"
+  }
+}

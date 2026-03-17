@@ -98,7 +98,7 @@ contract RemittanceBridge is ReentrancyGuard, Ownable {
     }
 
     // ─── Constructor ─────────────────────────────────────────────────────────
-    constructor(address _usdc, address _gateway) Ownable(msg.sender) {
+    constructor(address initialOwner, address _usdc, address _gateway) Ownable(initialOwner) {
         require(_usdc != address(0), "RemittanceBridge: zero usdc");
         usdc = IERC20(_usdc);
 

@@ -36,7 +36,7 @@ async function main() {
   console.log(`  Deployer balance: ${ethers.formatUnits(balance, 10)} DOT\n`);
 
   // ─── Config ───────────────────────────────────────────────────────────────
-  const DOT_PRICE_USD_8DEC = 600_000_000n; // $6.00 mock price (8 dec)
+  const DOT_PRICE_WAD = ethers.parseUnits("6", 18); // $6.00 mock price (WAD)
   const USDC_SEED_AMOUNT   = 100_000n * 1_000_000n; // 100,000 USDC to seed pool
 
   // Hyperbridge gateway: set to zero for mock mode (safe for testnet)
@@ -72,15 +72,15 @@ async function main() {
   // ─── Step 3: PriceOracle ──────────────────────────────────────────────────
   console.log("\n3. Deploying PriceOracle...");
   const PriceOracle = await ethers.getContractFactory("PriceOracle");
-  const oracle = await PriceOracle.deploy(DOT_PRICE_USD_8DEC);
+  const oracle = await PriceOracle.deploy(deployer.address, DOT_PRICE_WAD);
   await oracle.waitForDeployment();
   const oracleAddress = await oracle.getAddress();
-  console.log(`   ✓ PriceOracle: ${oracleAddress} (mock $${Number(DOT_PRICE_USD_8DEC) / 1e8})`);
+  console.log(`   ✓ PriceOracle: ${oracleAddress} (mock $6.00 WAD)`);
 
   // ─── Step 4: CollateralVault ──────────────────────────────────────────────
   console.log("\n4. Deploying CollateralVault...");
   const CollateralVault = await ethers.getContractFactory("CollateralVault");
-  const vault = await CollateralVault.deploy(wdotAddress);
+  const vault = await CollateralVault.deploy(deployer.address, wdotAddress);
   await vault.waitForDeployment();
   const vaultAddress = await vault.getAddress();
   console.log(`   ✓ CollateralVault: ${vaultAddress}`);
@@ -91,7 +91,7 @@ async function main() {
     console.log("   ⚠  Hyperbridge gateway not set — deploying in MOCK MODE");
   }
   const RemittanceBridge = await ethers.getContractFactory("RemittanceBridge");
-  const bridge = await RemittanceBridge.deploy(usdcAddress, HYPERBRIDGE_GATEWAY);
+  const bridge = await RemittanceBridge.deploy(deployer.address, usdcAddress, HYPERBRIDGE_GATEWAY);
   await bridge.waitForDeployment();
   const bridgeAddress = await bridge.getAddress();
   console.log(`   ✓ RemittanceBridge: ${bridgeAddress} (mockMode: ${HYPERBRIDGE_GATEWAY === ethers.ZeroAddress})`);
@@ -99,7 +99,7 @@ async function main() {
   // ─── Step 6: LendingPool ──────────────────────────────────────────────────
   console.log("\n6. Deploying LendingPool...");
   const LendingPool = await ethers.getContractFactory("LendingPool");
-  const pool = await LendingPool.deploy(usdcAddress, vaultAddress, oracleAddress);
+  const pool = await LendingPool.deploy(deployer.address, vaultAddress, oracleAddress, usdcAddress);
   await pool.waitForDeployment();
   const poolAddress = await pool.getAddress();
   console.log(`   ✓ LendingPool: ${poolAddress}`);

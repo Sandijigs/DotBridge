@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import {DecimalLib} from "./DecimalLib.sol";
 
 interface ICollateralVault {
     function lockCollateral(address user, uint256 amount) external;
@@ -23,7 +24,7 @@ interface IPriceOracle {
 interface IRemittanceBridge {
     function sendRemittance(
         address recipient,
-        uint256 amount,
+        uint256 usdcAmount,
         uint32  destChainId
     ) external;
 }
@@ -38,292 +39,247 @@ interface IRemittanceBridge {
  *   WDOT:  10 decimals  (1 DOT  = 1e10 planks)
  *   USDC:   6 decimals  (1 USDC = 1e6  units)
  *   Price: 18 decimals  (WAD — normalized from Chainlink by PriceOracle)
- *   Internal math: all values normalized to 18 decimals for safe arithmetic
+ *   Internal math: all values normalized to 18 decimals via DecimalLib
  *
- * @dev COLLATERAL MATH:
- *   COLLATERAL_RATIO = 150  → must hold 150% of borrowed value
- *   LIQUIDATION_THRESHOLD = 130  → health factor below 1.3 = liquidatable
- *   Health Factor = (collateralValueUSD * 100) / (debtValueUSD * COLLATERAL_RATIO)
- *   Health Factor >= 100 = safe, < 100 = liquidatable
+ * @dev COLLATERAL MATH (BPS):
+ *   COLLATERAL_RATIO_BPS = 15000  → must hold 150% of borrowed value
+ *   LIQ_THRESHOLD_BPS    = 13000  → health factor < 1 WAD = liquidatable
+ *   Health Factor = DecimalLib.healthFactor(collateralUsdWad, debtUsdWad, LIQ_THRESHOLD_BPS)
  *
  * @dev INTEREST MODEL:
  *   Simple (not compound) interest for v1 — deliberate for auditability.
- *   Interest = principal * INTEREST_RATE_BPS * timeElapsed / (365 days * 10000)
+ *   Interest = principal * INTEREST_RATE_BPS * timeElapsed / (BPS_BASE * SECONDS_PER_YEAR)
  *
  * @dev BORROW + BRIDGE FLOW:
- *   borrow(amount, destChainId, recipient):
- *     1. Validate collateral ratio
- *     2. Create/update position
- *     3. Lock WDOT in CollateralVault
- *     4. Transfer USDC to RemittanceBridge
- *     5. RemittanceBridge calls Hyperbridge → USDC lands on dest chain
+ *   borrow(usdcAmount, destChainId, remitRecipient):
+ *     1. Validate collateral ratio using DecimalLib
+ *     2. Lock ALL available WDOT in CollateralVault
+ *     3. Create position
+ *     4. Transfer USDC to user or bridge
  */
 contract LendingPool is ReentrancyGuard, Pausable, Ownable {
-    using SafeERC20 for IERC20;
+    using SafeERC20  for IERC20;
 
     // ─── Constants ───────────────────────────────────────────────────────────
-    uint256 public constant COLLATERAL_RATIO     = 150; // 150%
-    uint256 public constant LIQ_THRESHOLD        = 130; // 130%
-    uint256 public constant LIQ_BONUS            = 5;   // 5% bonus to liquidator
-    uint256 public constant INTEREST_RATE_BPS    = 500; // 5% per year (basis points)
+    uint256 public constant COLLATERAL_RATIO_BPS = 15_000; // 150%
+    uint256 public constant LIQ_THRESHOLD_BPS    = 13_000; // 130%
+    uint256 public constant LIQ_BONUS_BPS        =    500; // 5%
+    uint256 public constant INTEREST_RATE_BPS    =    500; // 5% annual
     uint256 public constant SECONDS_PER_YEAR     = 365 days;
-
-    // Precision constants for decimal normalization
-    uint256 public constant WDOT_DECIMALS_FACTOR = 1e10; // WDOT: 10 decimals
-    uint256 public constant USDC_DECIMALS_FACTOR = 1e6;  // USDC:  6 decimals
-    uint256 public constant PRICE_DECIMALS_FACTOR = 1e8; // Price: 8 decimals
-    uint256 public constant PRECISION_18          = 1e18; // Internal 18 dec
+    uint256 public constant BPS_BASE             = 10_000;
 
     // ─── Structs ─────────────────────────────────────────────────────────────
     struct Position {
-        uint256 collateralAmount; // WDOT locked (10 decimals)
-        uint256 debtPrincipal;    // USDC borrowed at open time (6 decimals)
-        uint256 borrowTimestamp;  // block.timestamp when position opened
+        uint256 collateralWdot;  // raw WDOT locked (10 decimals)
+        uint256 debtUsdc;        // raw USDC borrowed (6 decimals)
+        uint256 borrowTimestamp; // block.timestamp when position opened
         bool    isActive;
     }
 
     // ─── State ───────────────────────────────────────────────────────────────
-    IERC20             public immutable usdc;
-    ICollateralVault   public immutable vault;
-    IPriceOracle       public immutable oracle;
-    IRemittanceBridge  public           bridge;
-    bool               private          bridgeSet;
+    ICollateralVault  public immutable vault;
+    IPriceOracle      public immutable oracle;
+    IERC20            public immutable usdc;
+    IRemittanceBridge public           bridge;
 
     mapping(address => Position) public positions;
+    uint256 public totalDebtUsdc;
+    uint256 public protocolFeesUsdc;
 
     // ─── Events ──────────────────────────────────────────────────────────────
-    event Borrowed(address indexed user, uint256 usdcAmount, uint256 wdotLocked, uint32 destChainId, address recipient);
+    event Borrowed(address indexed user, uint256 usdcAmount, uint256 wdotLocked, uint256 destChainId, address recipient);
     event Repaid(address indexed user, uint256 principal, uint256 interest);
     event Liquidated(address indexed user, address indexed liquidator, uint256 wdotSeized, uint256 debtCovered);
-    event BridgeSet(address indexed bridge);
+    event BridgeUpdated(address indexed bridge);
 
     // ─── Constructor ─────────────────────────────────────────────────────────
     constructor(
-        address _usdc,
-        address _vault,
-        address _oracle
-    ) Ownable(msg.sender) {
-        require(_usdc   != address(0), "LendingPool: zero usdc");
-        require(_vault  != address(0), "LendingPool: zero vault");
-        require(_oracle != address(0), "LendingPool: zero oracle");
-        usdc   = IERC20(_usdc);
-        vault  = ICollateralVault(_vault);
-        oracle = IPriceOracle(_oracle);
-    }
-
-    // ─── Setup ───────────────────────────────────────────────────────────────
-
-    /// @notice Set RemittanceBridge. Called once after bridge is deployed.
-    function setBridge(address _bridge) external onlyOwner {
-        require(!bridgeSet, "LendingPool: bridge already set");
-        require(_bridge != address(0), "LendingPool: zero address");
-        bridge    = IRemittanceBridge(_bridge);
-        bridgeSet = true;
-        emit BridgeSet(_bridge);
+        address initialOwner,
+        address vaultAddr,
+        address oracleAddr,
+        address usdcAddr
+    ) Ownable(initialOwner) {
+        require(vaultAddr  != address(0), "LP: zero vault");
+        require(oracleAddr != address(0), "LP: zero oracle");
+        require(usdcAddr   != address(0), "LP: zero usdc");
+        vault  = ICollateralVault(vaultAddr);
+        oracle = IPriceOracle(oracleAddr);
+        usdc   = IERC20(usdcAddr);
     }
 
     // ─── Core Actions ────────────────────────────────────────────────────────
 
     /**
-     * @notice Borrow USDC against WDOT collateral and bridge it cross-chain.
-     * @param usdcAmount  Amount of USDC to borrow (6 decimals)
-     * @param destChainId EVM chain ID of destination (1=ETH, 56=BNB, 8453=Base)
-     * @param recipient   Address on destination chain to receive USDC
-     *
-     * @dev Collateral must already be deposited in CollateralVault.
-     *      This function does NOT accept token transfers — deposit WDOT first.
+     * @notice Borrow USDC against WDOT collateral.
+     *         If destChainId != 0 and bridge is set, USDC is bridged cross-chain.
+     *         Otherwise USDC is transferred directly to the caller.
+     * @param usdcAmount     Amount of USDC to borrow (6 decimals)
+     * @param destChainId    EVM chain ID of destination (0 = local, no bridge)
+     * @param remitRecipient Address on destination chain to receive USDC
      */
     function borrow(
         uint256 usdcAmount,
-        uint32  destChainId,
-        address recipient
+        uint256 destChainId,
+        address remitRecipient
     ) external nonReentrant whenNotPaused {
-        require(usdcAmount > 0,         "LendingPool: amount must be > 0");
-        require(recipient != address(0),"LendingPool: zero recipient");
-        require(!positions[msg.sender].isActive, "LendingPool: repay existing loan first");
+        require(usdcAmount > 0, "LP: zero borrow");
+        require(!positions[msg.sender].isActive, "LP: position already active");
 
         // --- Collateral check ---
-        uint256 freeWdot = vault.getAvailableCollateral(msg.sender);
-        require(freeWdot > 0, "LendingPool: no free collateral");
+        uint256 availableWdot = vault.getAvailableCollateral(msg.sender);
+        require(availableWdot > 0, "LP: no collateral deposited");
 
-        // How much WDOT is needed to back this borrow?
-        uint256 requiredWdot = _requiredCollateral(usdcAmount);
-        require(freeWdot >= requiredWdot, "LendingPool: insufficient collateral");
+        uint256 collateralUsdWad = oracle.getWdotValueInUsd(availableWdot);
+        uint256 debtUsdWad       = DecimalLib.usdcToWad(usdcAmount);
+        uint256 maxBorrowWad     = DecimalLib.maxBorrow(collateralUsdWad, COLLATERAL_RATIO_BPS);
+        require(debtUsdWad <= maxBorrowWad, "LP: insufficient collateral for this borrow");
 
-        // --- State update (before external calls: CEI pattern) ---
+        // --- Effects (before any external calls: CEI) ---
+        vault.lockCollateral(msg.sender, availableWdot);
+
         positions[msg.sender] = Position({
-            collateralAmount : requiredWdot,
-            debtPrincipal    : usdcAmount,
+            collateralWdot  : availableWdot,
+            debtUsdc        : usdcAmount,
             borrowTimestamp  : block.timestamp,
             isActive         : true
         });
 
-        // --- Lock collateral in vault ---
-        vault.lockCollateral(msg.sender, requiredWdot);
+        totalDebtUsdc += usdcAmount;
 
-        // --- Transfer USDC to bridge and trigger cross-chain send ---
-        // LendingPool must hold enough USDC liquidity (funded by protocol at launch)
-        usdc.safeTransfer(address(bridge), usdcAmount);
-        bridge.sendRemittance(recipient, usdcAmount, destChainId);
+        // --- Interactions ---
+        if (destChainId != 0 && address(bridge) != address(0)) {
+            require(remitRecipient != address(0), "LP: zero remit recipient");
+            usdc.safeTransfer(address(bridge), usdcAmount);
+            bridge.sendRemittance(remitRecipient, usdcAmount, uint32(destChainId));
+        } else {
+            usdc.safeTransfer(msg.sender, usdcAmount);
+        }
 
-        emit Borrowed(msg.sender, usdcAmount, requiredWdot, destChainId, recipient);
+        emit Borrowed(msg.sender, usdcAmount, availableWdot, destChainId, remitRecipient);
     }
 
     /**
      * @notice Repay USDC debt + accrued interest to unlock WDOT collateral.
      * @dev Caller must approve LendingPool for (principal + interest) USDC.
-     *      Call getRepayAmount(user) first to get the exact amount needed.
      */
-    function repay() external nonReentrant {
+    function repay() external nonReentrant whenNotPaused {
         Position storage pos = positions[msg.sender];
-        require(pos.isActive, "LendingPool: no active position");
+        require(pos.isActive, "LP: no active position");
 
-        uint256 interest   = _accruedInterest(pos.debtPrincipal, pos.borrowTimestamp);
-        uint256 totalOwed  = pos.debtPrincipal + interest;
+        uint256 interest       = _accrueInterest(pos.debtUsdc, pos.borrowTimestamp);
+        uint256 totalRepayment = pos.debtUsdc + interest;
 
-        uint256 wdotToRelease = pos.collateralAmount;
-        uint256 principal     = pos.debtPrincipal;
-
-        // --- Clear position BEFORE transfers (CEI) ---
+        // --- Effects — ALL before external calls (CEI) ---
+        protocolFeesUsdc         += interest;
+        totalDebtUsdc            -= pos.debtUsdc;
+        uint256 collateralToRelease = pos.collateralWdot;
+        uint256 principalRepaid     = pos.debtUsdc;
         delete positions[msg.sender];
 
-        // --- Pull repayment from user ---
-        usdc.safeTransferFrom(msg.sender, address(this), totalOwed);
+        // --- Interactions ---
+        usdc.safeTransferFrom(msg.sender, address(this), totalRepayment);
+        vault.releaseCollateral(msg.sender, collateralToRelease);
 
-        // --- Release collateral ---
-        vault.releaseCollateral(msg.sender, wdotToRelease);
-
-        emit Repaid(msg.sender, principal, interest);
+        emit Repaid(msg.sender, principalRepaid, interest);
     }
 
     /**
      * @notice Liquidate an undercollateralized position.
-     * @dev Anyone can call this. Liquidator supplies the debt, receives
-     *      collateral + 5% bonus. Remainder (if any) returns to the user.
+     * @dev Anyone can call. Liquidator pays the debt, receives all locked WDOT.
      * @param user Address of the undercollateralized borrower
      */
-    function liquidate(address user) external nonReentrant {
+    function liquidate(address user) external nonReentrant whenNotPaused {
         Position storage pos = positions[user];
-        require(pos.isActive, "LendingPool: no active position");
-        require(_healthFactor(user) < 100, "LendingPool: position is healthy");
+        require(pos.isActive, "LP: no active position");
 
-        uint256 totalDebt     = pos.debtPrincipal + _accruedInterest(pos.debtPrincipal, pos.borrowTimestamp);
-        uint256 wdotCollateral = pos.collateralAmount;
+        uint256 hf = getHealthFactor(user);
+        require(hf < DecimalLib.WAD, "LP: position is healthy");
 
-        // Liquidator covers the full debt
-        // They receive collateral + LIQ_BONUS %
-        uint256 wdotForLiquidator = _debtToWdot(totalDebt) * (100 + LIQ_BONUS) / 100;
-        if (wdotForLiquidator > wdotCollateral) {
-            wdotForLiquidator = wdotCollateral; // cap at available collateral
-        }
-        uint256 wdotRemainder = wdotCollateral - wdotForLiquidator;
+        uint256 interest  = _accrueInterest(pos.debtUsdc, pos.borrowTimestamp);
+        uint256 totalDebt = pos.debtUsdc + interest;
 
-        // --- Clear position BEFORE transfers (CEI) ---
+        // --- Effects ---
+        protocolFeesUsdc += interest;
+        totalDebtUsdc    -= pos.debtUsdc;
+        uint256 wdotToSeize = pos.collateralWdot;
         delete positions[user];
 
-        // --- Pull debt from liquidator ---
+        // --- Interactions ---
         usdc.safeTransferFrom(msg.sender, address(this), totalDebt);
+        vault.seizeCollateral(user, wdotToSeize, msg.sender);
 
-        // --- Seize collateral → liquidator ---
-        vault.seizeCollateral(user, wdotForLiquidator, msg.sender);
-
-        // --- Return remainder to user (if any) ---
-        if (wdotRemainder > 0) {
-            vault.seizeCollateral(user, wdotRemainder, user);
-        }
-
-        emit Liquidated(user, msg.sender, wdotForLiquidator, totalDebt);
+        emit Liquidated(user, msg.sender, wdotToSeize, totalDebt);
     }
 
     // ─── Views ───────────────────────────────────────────────────────────────
 
     /**
-     * @notice Get the current health factor for a user (100 = safe boundary)
-     * @return hf Health factor (100 = exactly at limit, >100 = safe, <100 = liquidatable)
+     * @notice Health factor in WAD. >= 1e18 = healthy. < 1e18 = liquidatable.
      */
-    function healthFactor(address user) external view returns (uint256 hf) {
-        return _healthFactor(user);
-    }
-
-    /**
-     * @notice Get the total amount owed (principal + accrued interest) for a user
-     * @return totalOwed USDC amount (6 decimals)
-     */
-    function getRepayAmount(address user) external view returns (uint256 totalOwed) {
+    function getHealthFactor(address user) public view returns (uint256) {
         Position storage pos = positions[user];
-        if (!pos.isActive) return 0;
-        return pos.debtPrincipal + _accruedInterest(pos.debtPrincipal, pos.borrowTimestamp);
+        if (!pos.isActive) return type(uint256).max;
+
+        uint256 collateralUsdWad = oracle.getWdotValueInUsd(pos.collateralWdot);
+        uint256 totalDebt        = pos.debtUsdc + _accrueInterest(pos.debtUsdc, pos.borrowTimestamp);
+        uint256 debtUsdWad       = DecimalLib.usdcToWad(totalDebt);
+
+        return DecimalLib.healthFactor(collateralUsdWad, debtUsdWad, LIQ_THRESHOLD_BPS);
     }
 
     /**
-     * @notice How much WDOT collateral is needed to borrow `usdcAmount`
-     * @param usdcAmount USDC amount (6 decimals)
-     * @return wdotNeeded WDOT amount in planks (10 decimals)
+     * @notice Get repayment breakdown for a user.
+     * @return principal USDC principal (6dp)
+     * @return interest  Accrued interest (6dp)
+     * @return total     principal + interest (6dp)
      */
-    function requiredCollateral(uint256 usdcAmount) external view returns (uint256 wdotNeeded) {
-        return _requiredCollateral(usdcAmount);
+    function getRepaymentAmount(address user) external view returns (
+        uint256 principal,
+        uint256 interest,
+        uint256 total
+    ) {
+        Position storage pos = positions[user];
+        if (!pos.isActive) return (0, 0, 0);
+        principal = pos.debtUsdc;
+        interest  = _accrueInterest(pos.debtUsdc, pos.borrowTimestamp);
+        total     = principal + interest;
+    }
+
+    /**
+     * @notice Max additional USDC (in WAD) the user could borrow given current collateral.
+     */
+    function getMaxBorrow(address user) external view returns (uint256) {
+        uint256 availableWdot = vault.getAvailableCollateral(user);
+        if (availableWdot == 0) return 0;
+        uint256 collateralUsdWad = oracle.getWdotValueInUsd(availableWdot);
+        return DecimalLib.maxBorrow(collateralUsdWad, COLLATERAL_RATIO_BPS);
     }
 
     // ─── Internal Helpers ────────────────────────────────────────────────────
 
-    function _healthFactor(address user) internal view returns (uint256) {
-        Position storage pos = positions[user];
-        if (!pos.isActive) return type(uint256).max;
-
-        uint256 totalDebt18    = _toUsd18(pos.debtPrincipal + _accruedInterest(pos.debtPrincipal, pos.borrowTimestamp), false);
-        uint256 collateral18   = oracle.getWdotValueInUsd(pos.collateralAmount);
-
-        if (totalDebt18 == 0) return type(uint256).max;
-
-        // Health factor: (collateral * 100) / (debt * LIQ_THRESHOLD / 100)
-        // Scaled to integer: 100 = safe boundary
-        return (collateral18 * 100 * 100) / (totalDebt18 * LIQ_THRESHOLD);
-    }
-
-    function _requiredCollateral(uint256 usdcAmount) internal view returns (uint256) {
-        // usdcAmount (6 dec) → usd18 (18 dec)
-        uint256 usdNeeded18 = _toUsd18(usdcAmount, false) * COLLATERAL_RATIO / 100;
-
-        // usd18 → wdot (10 dec) using WAD price
-        uint256 dotPriceWad = oracle.getDotPriceWad(); // 18 dec
-        // wdotAmount = usdNeeded18 * 1e10 / dotPriceWad
-        // (18dec * 10dec) / 18dec = 10dec ✓
-        return (usdNeeded18 * WDOT_DECIMALS_FACTOR) / dotPriceWad;
-    }
-
-    function _debtToWdot(uint256 usdcAmount) internal view returns (uint256) {
-        return _requiredCollateral(usdcAmount * 100 / COLLATERAL_RATIO);
-    }
-
-    function _accruedInterest(uint256 principal, uint256 borrowTimestamp) internal view returns (uint256) {
-        uint256 elapsed = block.timestamp - borrowTimestamp;
-        // interest = principal * rate * time / (year * 10000)
-        return (principal * INTEREST_RATE_BPS * elapsed) / (SECONDS_PER_YEAR * 10000);
-    }
-
-    /// @dev Convert token amount to 18 decimal USD value
-    /// @param isWdot true for WDOT amounts, false for USDC amounts
-    function _toUsd18(uint256 amount, bool isWdot) internal pure returns (uint256) {
-        if (isWdot) {
-            // WDOT: 10 dec → 18 dec: multiply by 1e8
-            return amount * 1e8;
-        } else {
-            // USDC: 6 dec → 18 dec: multiply by 1e12
-            return amount * 1e12;
-        }
+    /**
+     * @notice Simple interest calculation. Result stays in USDC (6dp).
+     */
+    function _accrueInterest(uint256 principal, uint256 ts) internal view returns (uint256) {
+        uint256 elapsed = block.timestamp - ts;
+        return (principal * INTEREST_RATE_BPS * elapsed) / (BPS_BASE * SECONDS_PER_YEAR);
     }
 
     // ─── Admin ───────────────────────────────────────────────────────────────
 
-    /// @notice Pause borrow and bridge (repay always stays open)
-    function pause() external onlyOwner { _pause(); }
+    function setBridge(address _bridge) external onlyOwner {
+        require(_bridge != address(0), "LP: zero bridge");
+        bridge = IRemittanceBridge(_bridge);
+        emit BridgeUpdated(_bridge);
+    }
 
-    /// @notice Unpause
+    function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
 
-    /// @notice Recover mistakenly sent tokens (not USDC collateral)
-    function recoverToken(address token, uint256 amount) external onlyOwner {
-        require(token != address(usdc), "LendingPool: cannot recover USDC");
-        IERC20(token).safeTransfer(owner(), amount);
+    function withdrawFees(address to) external onlyOwner {
+        require(to != address(0), "LP: zero address");
+        uint256 fees = protocolFeesUsdc;
+        protocolFeesUsdc = 0;
+        usdc.safeTransfer(to, fees);
     }
 }

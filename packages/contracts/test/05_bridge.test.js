@@ -22,6 +22,7 @@ describe("RemittanceBridge", function () {
 
     const RemittanceBridge = await ethers.getContractFactory("RemittanceBridge");
     bridge = await RemittanceBridge.deploy(
+      owner.address,
       await usdc.getAddress(),
       await mockGateway.getAddress()
     );
@@ -36,7 +37,7 @@ describe("RemittanceBridge", function () {
     let mockBridge;
     beforeEach(async () => {
       const RemittanceBridge = await ethers.getContractFactory("RemittanceBridge");
-      mockBridge = await RemittanceBridge.deploy(await usdc.getAddress(), ethers.ZeroAddress);
+      mockBridge = await RemittanceBridge.deploy(owner.address, await usdc.getAddress(), ethers.ZeroAddress);
       await mockBridge.setLendingPool(pool.address);
       await usdc.transfer(await mockBridge.getAddress(), HUNDRED_USDC);
     });
@@ -59,7 +60,7 @@ describe("RemittanceBridge", function () {
   describe("getTransfer()", () => {
     it("stores transfer record with pending status initially (mock mode)", async () => {
       const RemittanceBridge = await ethers.getContractFactory("RemittanceBridge");
-      const mb = await RemittanceBridge.deploy(await usdc.getAddress(), ethers.ZeroAddress);
+      const mb = await RemittanceBridge.deploy(owner.address, await usdc.getAddress(), ethers.ZeroAddress);
       await mb.setLendingPool(pool.address);
 
       const tx = await mb.connect(pool).sendRemittance(alice.address, HUNDRED_USDC, BNB_CHAIN_ID);

@@ -124,12 +124,13 @@ describe('Feature 6 — Integration (full flow)', () => {
       await vault.connect(alice).deposit(DOT(100));
     });
 
-    it('sends USDC to recipient via bridge in mock mode', async () => {
-      const beforeBob = await mockUsdc.balanceOf(bob.address);
+    it('sends USDC to bridge in mock mode', async () => {
+      const bridgeAddr = await bridge.getAddress();
+      const beforeBridge = await mockUsdc.balanceOf(bridgeAddr);
       // Chain 56 = BNB Chain, bob is recipient
       await pool.connect(alice).borrow(USDC(200), 56, bob.address);
-      // In mock mode: bridge transfers USDC locally to simulate cross-chain
-      expect(await mockUsdc.balanceOf(bob.address)).to.equal(beforeBob + USDC(200));
+      // LendingPool transfers USDC to bridge; bridge holds it in mock mode
+      expect(await mockUsdc.balanceOf(bridgeAddr)).to.equal(beforeBridge + USDC(200));
     });
 
     it('emits RemittanceSent event from bridge', async () => {
@@ -150,9 +151,10 @@ describe('Feature 6 — Integration (full flow)', () => {
       const [principal, interest, total] = await pool.getRepaymentAmount(alice.address);
       expect(principal).to.equal(USDC(300));
 
-      // Give Alice enough USDC to repay
-      await mockUsdc.mint(alice.address, interest); // top up for interest
-      await mockUsdc.connect(alice).approve(await pool.getAddress(), total);
+      // Give Alice enough USDC to repay (+ buffer for interest accrual between blocks)
+      const buffer = USDC(1);
+      await mockUsdc.mint(alice.address, interest + buffer);
+      await mockUsdc.connect(alice).approve(await pool.getAddress(), total + buffer);
       await pool.connect(alice).repay();
 
       const pos = await pool.positions(alice.address);
@@ -189,9 +191,10 @@ describe('Feature 6 — Integration (full flow)', () => {
       await oracle.setMockPrice(parseUnits('3', 18)); // crash price
       const [,, totalDebt] = await pool.getRepaymentAmount(alice.address);
 
-      // Bob needs USDC to liquidate
-      await mockUsdc.mint(bob.address, totalDebt);
-      await mockUsdc.connect(bob).approve(await pool.getAddress(), totalDebt);
+      // Bob needs USDC to liquidate (+ buffer for interest accrual between blocks)
+      const buffer = USDC(1);
+      await mockUsdc.mint(bob.address, totalDebt + buffer);
+      await mockUsdc.connect(bob).approve(await pool.getAddress(), totalDebt + buffer);
 
       const bobWdotBefore = await wdot.balanceOf(bob.address);
       await pool.connect(bob).liquidate(alice.address);

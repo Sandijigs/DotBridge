@@ -1,5 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
-require("dotenv").config();
+require("dotenv").config({ path: "../../.env" });
 
 /**
  * POLKADOT HUB NETWORK CONFIG
@@ -27,7 +27,7 @@ require("dotenv").config();
  *   Health factor math normalizes all values to 18 decimals internally.
  */
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x" + "0".repeat(64);
+const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "0x" + "0".repeat(64);
 const WESTEND_RPC  = process.env.WESTEND_RPC  || "https://westend-asset-hub-eth-rpc.polkadot.io";
 const POLKADOT_RPC = process.env.POLKADOT_RPC || "https://asset-hub-polkadot-eth-rpc.polkadot.io";
 
@@ -36,6 +36,7 @@ module.exports = {
   solidity: {
     version: "0.8.27",
     settings: {
+      evmVersion: "paris", // CRITICAL: newer opcodes (PUSH0) unsupported on Polkadot Hub REVM
       optimizer: {
         enabled: true,
         runs: 200,
@@ -57,13 +58,20 @@ module.exports = {
     },
 
     // Westend Asset Hub — PRIMARY TESTNET for this hackathon
+    // Polkadot Hub Testnet — also aliased as polkadotHubTestnet
     westend: {
       url: WESTEND_RPC,
       chainId: 420420421,
       accounts: [PRIVATE_KEY],
-      // Polkadot Hub has different gas dynamics — don't hardcode gas price
-      // Let the node estimate via eth_gasPrice
-      gasMultiplier: 1.2, // 20% buffer on gas estimates
+      gasMultiplier: 1.2,
+      timeout: 120000,
+    },
+    polkadotHubTestnet: {
+      url: WESTEND_RPC,
+      chainId: 420420421,
+      accounts: [PRIVATE_KEY],
+      gasMultiplier: 1.2,
+      timeout: 120000,
     },
 
     // Polkadot Hub Mainnet — only after full testnet validation

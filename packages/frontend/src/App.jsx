@@ -2,6 +2,8 @@ import React from 'react';
 import { Web3Provider } from './contexts/Web3Context';
 import { ConnectWallet } from './components/ConnectWallet/ConnectWallet';
 import { DepositFlow } from './components/Deposit/DepositFlow';
+import { BorrowPanel } from './components/Borrow/BorrowPanel';
+import { RemittanceStatus } from './components/Remit/RemittanceStatus';
 
 function AppContent() {
   return (
@@ -45,8 +47,10 @@ function AppContent() {
           to any recipient via Hyperbridge — all in one transaction.
         </p>
 
-        <div style={{ marginTop: '48px', maxWidth: '520px', marginLeft: 'auto', marginRight: 'auto', textAlign: 'left' }}>
+        <div style={{ marginTop: '48px', maxWidth: '520px', marginLeft: 'auto', marginRight: 'auto', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '32px' }}>
           <DepositFlow />
+          <BorrowPanel />
+          <RemittanceStatus />
         </div>
       </main>
     </div>

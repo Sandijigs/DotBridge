@@ -25,7 +25,7 @@ interface IRemittanceBridge {
     function sendRemittance(
         address recipient,
         uint256 usdcAmount,
-        uint32  destChainId
+        uint256 destChainId
     ) external;
 }
 
@@ -149,8 +149,8 @@ contract LendingPool is ReentrancyGuard, Pausable, Ownable {
         // --- Interactions ---
         if (destChainId != 0 && address(bridge) != address(0)) {
             require(remitRecipient != address(0), "LP: zero remit recipient");
-            usdc.safeTransfer(address(bridge), usdcAmount);
-            bridge.sendRemittance(remitRecipient, usdcAmount, uint32(destChainId));
+            usdc.forceApprove(address(bridge), usdcAmount);
+            bridge.sendRemittance(remitRecipient, usdcAmount, destChainId);
         } else {
             usdc.safeTransfer(msg.sender, usdcAmount);
         }

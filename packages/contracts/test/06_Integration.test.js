@@ -60,8 +60,6 @@ describe('Feature 6 — Integration (full flow)', () => {
 
     // Seed pool with USDC liquidity
     await mockUsdc.mint(await pool.getAddress(), USDC(500_000));
-    // Seed bridge with USDC for mock mode remittances
-    await mockUsdc.mint(await bridge.getAddress(), USDC(500_000));
   });
 
   describe('Step 1–2: Wrap DOT + Deposit Collateral', () => {
@@ -124,13 +122,12 @@ describe('Feature 6 — Integration (full flow)', () => {
       await vault.connect(alice).deposit(DOT(100));
     });
 
-    it('sends USDC to bridge in mock mode', async () => {
-      const bridgeAddr = await bridge.getAddress();
-      const beforeBridge = await mockUsdc.balanceOf(bridgeAddr);
+    it('sends USDC to recipient via bridge in mock mode', async () => {
+      const beforeBob = await mockUsdc.balanceOf(bob.address);
       // Chain 56 = BNB Chain, bob is recipient
       await pool.connect(alice).borrow(USDC(200), 56, bob.address);
-      // LendingPool transfers USDC to bridge; bridge holds it in mock mode
-      expect(await mockUsdc.balanceOf(bridgeAddr)).to.equal(beforeBridge + USDC(200));
+      // Mock mode: bridge transfers USDC locally to recipient
+      expect(await mockUsdc.balanceOf(bob.address)).to.equal(beforeBob + USDC(200));
     });
 
     it('emits RemittanceSent event from bridge', async () => {

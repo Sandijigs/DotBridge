@@ -1,6 +1,7 @@
 import React from 'react';
 import { Web3Provider } from './contexts/Web3Context';
 import { ConnectWallet } from './components/ConnectWallet/ConnectWallet';
+import { DepositFlow } from './components/Deposit/DepositFlow';
 
 function AppContent() {
   return (
@@ -44,25 +45,8 @@ function AppContent() {
           to any recipient via Hyperbridge — all in one transaction.
         </p>
 
-        <div style={{
-          marginTop: '48px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '24px',
-        }}>
-          {['Wrap DOT', 'Deposit Collateral', 'Borrow USDC', 'Send Remittance'].map((step, i) => (
-            <div key={step} style={{
-              background: '#1a1a2e',
-              borderRadius: '12px',
-              padding: '24px',
-              border: '1px solid #2a2a4e',
-            }}>
-              <div style={{ fontSize: '32px', marginBottom: '8px', color: '#e91e8c' }}>
-                {i + 1}
-              </div>
-              <div style={{ fontWeight: 'bold' }}>{step}</div>
-            </div>
-          ))}
+        <div style={{ marginTop: '48px', maxWidth: '520px', marginLeft: 'auto', marginRight: 'auto', textAlign: 'left' }}>
+          <DepositFlow />
         </div>
       </main>
     </div>

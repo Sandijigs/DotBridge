@@ -117,7 +117,7 @@ function FeeEstimate({ destChainId }) {
 
   return (
     <div style={{ ...hintStyle, color: '#aaa' }}>
-      Bridge fee: ~{feeDisplay} WND
+      Bridge fee: ~{feeDisplay} PAS
     </div>
   );
 }

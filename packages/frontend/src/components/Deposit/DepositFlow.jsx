@@ -164,7 +164,7 @@ export function DepositFlow() {
           style={inputStyle}
         />
         <div style={balanceHint}>
-          Wallet: {nativeBal.toFixed(4)} WND
+          Wallet: {nativeBal.toFixed(4)} PAS
         </div>
 
         <button

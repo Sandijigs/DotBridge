@@ -7,16 +7,16 @@ require("dotenv").config({ path: "../../.env" });
  * EVM Track (REVM): Standard solc compilation works as-is.
  * No resolc needed — that's only for the PVM/PolkaVM track.
  *
- * Westend Asset Hub Testnet (use for all development & demo):
- *   RPC:      https://westend-asset-hub-eth-rpc.polkadot.io
- *   Chain ID: 420420421
- *   Currency: WND (testnet DOT)
- *   Faucet:   https://faucet.polkadot.io/westend
- *   Explorer: https://assethub-westend.subscan.io
+ * Polkadot Hub TestNet (Paseo) — use for all development & demo:
+ *   RPC:      https://eth-rpc-testnet.polkadot.io/
+ *   Chain ID: 420420417
+ *   Currency: PAS (Paseo testnet DOT)
+ *   Faucet:   https://faucet.polkadot.io
+ *   Explorer: https://blockscout-testnet.polkadot.io
  *
  * Polkadot Hub Mainnet:
- *   RPC:      https://asset-hub-polkadot-eth-rpc.polkadot.io
- *   Chain ID: 420420420
+ *   RPC:      https://eth-rpc.polkadot.io/
+ *   Chain ID: 420420419
  *   Currency: DOT
  *
  * IMPORTANT — DOT DECIMALS:
@@ -28,8 +28,8 @@ require("dotenv").config({ path: "../../.env" });
  */
 
 const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "0x" + "0".repeat(64);
-const WESTEND_RPC  = process.env.WESTEND_RPC  || "https://westend-asset-hub-eth-rpc.polkadot.io";
-const POLKADOT_RPC = process.env.POLKADOT_RPC || "https://asset-hub-polkadot-eth-rpc.polkadot.io";
+const TESTNET_RPC  = process.env.TESTNET_RPC  || "https://eth-rpc-testnet.polkadot.io/";
+const POLKADOT_RPC = process.env.POLKADOT_RPC || "https://eth-rpc.polkadot.io/";
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -40,6 +40,9 @@ module.exports = {
       optimizer: {
         enabled: true,
         runs: 200,
+      },
+      metadata: {
+        bytecodeHash: "none", // Strip metadata — Polkadot Hub REVM rejects cbor-encoded metadata
       },
       viaIR: false, // Keep false for Polkadot Hub EVM compatibility
     },
@@ -57,27 +60,21 @@ module.exports = {
       chainId: 31337,
     },
 
-    // Westend Asset Hub — PRIMARY TESTNET for this hackathon
-    // Polkadot Hub Testnet — also aliased as polkadotHubTestnet
-    westend: {
-      url: WESTEND_RPC,
-      chainId: 420420421,
-      accounts: [PRIVATE_KEY],
-      gasMultiplier: 1.2,
-      timeout: 120000,
-    },
+    // Polkadot Hub TestNet (Paseo) — PRIMARY TESTNET for this hackathon
+    // REVM with AllowEVMBytecode enabled — accepts standard solc output
     polkadotHubTestnet: {
-      url: WESTEND_RPC,
-      chainId: 420420421,
+      url: TESTNET_RPC,
+      chainId: 420420417,
       accounts: [PRIVATE_KEY],
-      gasMultiplier: 1.2,
+      gasPrice: 1_000_000_000_000, // 1000 Gwei — fixed for Polkadot Hub
+      gas: 5_000_000,
       timeout: 120000,
     },
 
     // Polkadot Hub Mainnet — only after full testnet validation
     polkadot: {
       url: POLKADOT_RPC,
-      chainId: 420420420,
+      chainId: 420420419,
       accounts: [PRIVATE_KEY],
       gasMultiplier: 1.2,
     },

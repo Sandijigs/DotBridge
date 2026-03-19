@@ -6,5 +6,13 @@
     "CollateralVault": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
     "RemittanceBridge": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
     "LendingPool": "0x0165878A594ca255338adfa4d48449f69242Eb8F"
+  },
+  "polkadotHubTestnet": {
+    "WDOT": "0x330eFe22a73AAD374b887d6F77cd90fa16b6cC60",
+    "MockUSDC": "0xda2B35880c142B27bF7db4681Cc85FAd2F352997",
+    "PriceOracle": "0xEc3455BF8842b9b96b0f10450CBA6c685de84d9B",
+    "CollateralVault": "0x62A97b5DD2D7680219B3E7C745D6C74fb7c463F1",
+    "RemittanceBridge": "0x891Fc6d2dFEd0f5ff4Db00690eB552eB029564a8",
+    "LendingPool": "0x03540C0af2350218C206168e0F758450Db84e179"
   }
 }

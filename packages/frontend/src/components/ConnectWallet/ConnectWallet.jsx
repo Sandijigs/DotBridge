@@ -69,7 +69,7 @@ export function ConnectWallet() {
           </span>
           <span style={{ color: '#e91e8c', fontWeight: 'bold' }}>
             {balance
-              ? `${parseFloat(formatUnits(balance.value, 10)).toFixed(4)} WND`
+              ? `${parseFloat(formatUnits(balance.value, 10)).toFixed(4)} PAS`
               : '...'}
           </span>
         </div>

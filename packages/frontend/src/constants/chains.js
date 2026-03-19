@@ -1,26 +1,26 @@
 // src/constants/chains.js
-// Polkadot Hub testnet (Westend Asset Hub) chain definition for Wagmi
+// Polkadot Hub TestNet (Paseo) chain definition for Wagmi
 
 export const polkadotHubTestnet = {
-  id: 420420421,
+  id: 420420417,
   name: 'Polkadot Hub Testnet',
   nativeCurrency: {
-    name: 'Westend DOT',
-    symbol: 'WND',
+    name: 'Paseo DOT',
+    symbol: 'PAS',
     decimals: 10,   // CRITICAL: DOT is 10 decimals
   },
   rpcUrls: {
     default: {
-      http: ['https://westend-asset-hub-eth-rpc.polkadot.io'],
+      http: ['https://eth-rpc-testnet.polkadot.io/'],
     },
     public: {
-      http: ['https://westend-asset-hub-eth-rpc.polkadot.io'],
+      http: ['https://eth-rpc-testnet.polkadot.io/'],
     },
   },
   blockExplorers: {
     default: {
-      name: 'Subscan',
-      url: 'https://assethub-westend.subscan.io',
+      name: 'Blockscout',
+      url: 'https://blockscout-testnet.polkadot.io',
     },
   },
   testnet: true,

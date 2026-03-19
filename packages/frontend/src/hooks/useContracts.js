@@ -17,9 +17,9 @@ export function useContracts() {
 
   // Map chain IDs to address keys in addresses.json
   let networkKey;
-  if (chainId === 420420421) {
+  if (chainId === 420420417 || chainId === 420420421) {
     // Check which key exists in addresses.json
-    networkKey = addresses['westend'] ? 'westend' : 'polkadotHubTestnet';
+    networkKey = addresses['polkadotHubTestnet'] ? 'polkadotHubTestnet' : 'westend';
   } else {
     networkKey = addresses['localhost'] ? 'localhost' : 'hardhat';
   }

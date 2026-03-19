@@ -6,7 +6,7 @@ import { BorrowPanel } from './components/Borrow/BorrowPanel';
 import { Dashboard } from './components/Dashboard/Dashboard';
 
 function AppContent() {
-  const depositRef = useRef(null);
+  const depositRef = useRef<HTMLDivElement>(null);
 
   return (
     <div style={{
@@ -15,7 +15,6 @@ function AppContent() {
       color: '#ffffff',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     }}>
-      {/* Header */}
       <header style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -49,7 +48,6 @@ function AppContent() {
         </p>
 
         <div style={{ marginTop: '48px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          {/* Deposit + Borrow column */}
           <div style={{ maxWidth: '520px', marginLeft: 'auto', marginRight: 'auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '32px' }}>
             <div ref={depositRef}>
               <DepositFlow />
@@ -57,7 +55,6 @@ function AppContent() {
             <BorrowPanel />
           </div>
 
-          {/* Dashboard: Position, Collateral Summary, Remittance History */}
           <Dashboard depositRef={depositRef} />
         </div>
       </main>

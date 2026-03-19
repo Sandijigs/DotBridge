@@ -6,8 +6,7 @@ import { polkadotHubTestnet } from '../../constants/chains';
 
 const CHAIN_ID = polkadotHubTestnet.id;
 
-function truncateAddress(addr) {
-  if (!addr) return '';
+function truncateAddress(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
@@ -65,7 +64,7 @@ export function ConnectWallet() {
           fontSize: '14px',
         }}>
           <span style={{ fontFamily: 'monospace' }}>
-            {truncateAddress(address)}
+            {truncateAddress(address!)}
           </span>
           <span style={{ color: '#e91e8c', fontWeight: 'bold' }}>
             {balance

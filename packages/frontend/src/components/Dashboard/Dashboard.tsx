@@ -8,7 +8,7 @@ import { useCollateralBalances } from '../../hooks/useVault';
 
 const WDOT_DECIMALS = 10;
 
-const cardStyle = {
+const cardStyle: React.CSSProperties = {
   background: '#1a1a2e',
   borderRadius: '12px',
   padding: '24px',
@@ -40,12 +40,7 @@ function CollateralSummary() {
             {parseFloat(formatUnits(locked.raw, WDOT_DECIMALS)).toFixed(4)} WDOT
           </span>
         </div>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          borderTop: '1px solid #2a2a4e',
-          paddingTop: '12px',
-        }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #2a2a4e', paddingTop: '12px' }}>
           <span style={{ color: '#ccc', fontWeight: 'bold' }}>Total</span>
           <span style={{ fontWeight: 'bold' }}>{totalFormatted} WDOT</span>
         </div>
@@ -54,15 +49,18 @@ function CollateralSummary() {
   );
 }
 
-export function Dashboard({ depositRef }) {
+interface DashboardProps {
+  depositRef: React.RefObject<HTMLDivElement>;
+}
+
+export function Dashboard({ depositRef }: DashboardProps) {
   const { address } = useAccount();
 
   const scrollToDeposit = useCallback(() => {
     depositRef?.current?.scrollIntoView({ behavior: 'smooth' });
   }, [depositRef]);
 
-  // Repay action scrolls to the position card (which has the repay button)
-  const positionRef = useRef(null);
+  const positionRef = useRef<HTMLDivElement>(null);
   const scrollToPosition = useCallback(() => {
     positionRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -77,25 +75,15 @@ export function Dashboard({ depositRef }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Liquidation warning banner */}
-      <LiquidationPanel
-        onAddCollateral={scrollToDeposit}
-        onRepay={scrollToPosition}
-      />
+      <LiquidationPanel onAddCollateral={scrollToDeposit} onRepay={scrollToPosition} />
 
-      {/* Row 1: Position + Collateral Summary */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1.5fr 1fr',
-        gap: '24px',
-      }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '24px' }}>
         <div ref={positionRef}>
           <PositionCard />
         </div>
         <CollateralSummary />
       </div>
 
-      {/* Row 2: Remittance History */}
       <RemittanceStatus />
     </div>
   );

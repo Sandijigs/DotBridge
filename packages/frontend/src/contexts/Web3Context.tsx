@@ -7,7 +7,7 @@ import { polkadotHubTestnet } from '../constants/chains';
 
 const config = getDefaultConfig({
   appName: 'DotBridge',
-  projectId: 'dotbridge-demo', // WalletConnect project ID (placeholder for hackathon)
+  projectId: 'dotbridge-demo',
   chains: [polkadotHubTestnet],
   transports: {
     [polkadotHubTestnet.id]: http(polkadotHubTestnet.rpcUrls.default.http[0]),
@@ -16,7 +16,11 @@ const config = getDefaultConfig({
 
 const queryClient = new QueryClient();
 
-export function Web3Provider({ children }) {
+interface Web3ProviderProps {
+  children: React.ReactNode;
+}
+
+export function Web3Provider({ children }: Web3ProviderProps) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>

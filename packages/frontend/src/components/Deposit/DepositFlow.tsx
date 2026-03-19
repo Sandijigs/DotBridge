@@ -5,16 +5,16 @@ import { useWrapDOT, useWDOTBalance } from '../../hooks/useWDOT';
 import { useDepositCollateral, useCollateralBalances } from '../../hooks/useVault';
 import { polkadotHubTestnet } from '../../constants/chains';
 
-const SUBSCAN_TX = 'https://assethub-westend.subscan.io/tx/';
+const EXPLORER_TX = polkadotHubTestnet.blockExplorers!.default.url + '/tx/';
 
-const cardStyle = {
+const cardStyle: React.CSSProperties = {
   background: '#1a1a2e',
   borderRadius: '12px',
   padding: '24px',
   border: '1px solid #2a2a4e',
 };
 
-const inputStyle = {
+const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '12px 16px',
   background: '#0d0d1a',
@@ -26,7 +26,7 @@ const inputStyle = {
   boxSizing: 'border-box',
 };
 
-const btnBase = {
+const btnBase: React.CSSProperties = {
   width: '100%',
   padding: '14px',
   borderRadius: '8px',
@@ -37,42 +37,18 @@ const btnBase = {
   marginTop: '12px',
 };
 
-const btnPrimary = {
-  ...btnBase,
-  background: '#e91e8c',
-  color: '#ffffff',
-};
+const btnPrimary: React.CSSProperties = { ...btnBase, background: '#e91e8c', color: '#ffffff' };
+const btnDisabled: React.CSSProperties = { ...btnBase, background: '#444', color: '#888', cursor: 'not-allowed' };
+const balanceHint: React.CSSProperties = { fontSize: '13px', color: '#888', marginTop: '6px', textAlign: 'right' };
+const labelStyle: React.CSSProperties = { display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px', color: '#ccc' };
 
-const btnDisabled = {
-  ...btnBase,
-  background: '#444',
-  color: '#888',
-  cursor: 'not-allowed',
-};
+interface StepBadgeProps {
+  label: string;
+  active: boolean;
+  done: boolean;
+}
 
-const balanceHint = {
-  fontSize: '13px',
-  color: '#888',
-  marginTop: '6px',
-  textAlign: 'right',
-};
-
-const labelStyle = {
-  display: 'block',
-  marginBottom: '8px',
-  fontWeight: 'bold',
-  fontSize: '14px',
-  color: '#ccc',
-};
-
-const stepIndicator = {
-  display: 'flex',
-  gap: '8px',
-  marginBottom: '12px',
-  fontSize: '13px',
-};
-
-function StepBadge({ label, active, done }) {
+function StepBadge({ label, active, done }: StepBadgeProps) {
   const bg = done ? '#22c55e' : active ? '#e91e8c' : '#333';
   const color = done || active ? '#fff' : '#666';
   return (
@@ -98,11 +74,9 @@ export function DepositFlow() {
   const { raw: wdotRaw, formatted: wdotFormatted, refetch: refetchWdot } = useWDOTBalance(address);
   const { available, locked, refetch: refetchVault } = useCollateralBalances(address);
 
-  // Wrap state
   const [wrapAmount, setWrapAmount] = useState('');
   const { wrap, isLoading: wrapLoading, txHash: wrapTx, error: wrapError } = useWrapDOT();
 
-  // Deposit state
   const [depositAmount, setDepositAmount] = useState('');
   const {
     deposit,
@@ -128,7 +102,7 @@ export function DepositFlow() {
       await wrap(wrapAmount);
       setWrapAmount('');
       refreshAll();
-    } catch (_) { /* error state handled by hook */ }
+    } catch { /* error state handled by hook */ }
   };
 
   const handleDeposit = async () => {
@@ -136,7 +110,7 @@ export function DepositFlow() {
       await deposit(depositAmount);
       setDepositAmount('');
       refreshAll();
-    } catch (_) { /* error state handled by hook */ }
+    } catch { /* error state handled by hook */ }
   };
 
   if (!address) {
@@ -176,20 +150,13 @@ export function DepositFlow() {
         </button>
 
         {wrapError && (
-          <div style={{ color: '#ff4444', fontSize: '13px', marginTop: '8px' }}>
-            {wrapError}
-          </div>
+          <div style={{ color: '#ff4444', fontSize: '13px', marginTop: '8px' }}>{wrapError}</div>
         )}
         {wrapTx && (
           <div style={{ fontSize: '13px', marginTop: '8px', color: '#22c55e' }}>
             Success:{' '}
-            <a
-              href={SUBSCAN_TX + wrapTx}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: '#22c55e' }}
-            >
-              View on Subscan
+            <a href={EXPLORER_TX + wrapTx} target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e' }}>
+              View on Explorer
             </a>
           </div>
         )}
@@ -199,18 +166,10 @@ export function DepositFlow() {
       <div style={cardStyle}>
         <h3 style={{ margin: '0 0 16px', color: '#e91e8c' }}>2. Deposit WDOT as Collateral</h3>
 
-        <div style={stepIndicator}>
-          <StepBadge
-            label="Approve"
-            active={depositStep === 'approving'}
-            done={depositStep === 'depositing' || depositStep === 'done'}
-          />
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', fontSize: '13px' }}>
+          <StepBadge label="Approve" active={depositStep === 'approving'} done={depositStep === 'depositing' || depositStep === 'done'} />
           <span style={{ color: '#444' }}>→</span>
-          <StepBadge
-            label="Deposit"
-            active={depositStep === 'depositing'}
-            done={depositStep === 'done'}
-          />
+          <StepBadge label="Deposit" active={depositStep === 'depositing'} done={depositStep === 'done'} />
         </div>
 
         <label style={labelStyle}>Amount (WDOT)</label>
@@ -224,37 +183,24 @@ export function DepositFlow() {
           disabled={depositLoading}
           style={inputStyle}
         />
-        <div style={balanceHint}>
-          Wallet: {wdotFormatted}
-        </div>
+        <div style={balanceHint}>Wallet: {wdotFormatted}</div>
 
         <button
           onClick={handleDeposit}
           disabled={!depositValid || depositLoading}
           style={!depositValid || depositLoading ? btnDisabled : btnPrimary}
         >
-          {depositStep === 'approving'
-            ? 'Approving vault...'
-            : depositStep === 'depositing'
-              ? 'Depositing...'
-              : 'Approve & Deposit'}
+          {depositStep === 'approving' ? 'Approving vault...' : depositStep === 'depositing' ? 'Depositing...' : 'Approve & Deposit'}
         </button>
 
         {depositError && (
-          <div style={{ color: '#ff4444', fontSize: '13px', marginTop: '8px' }}>
-            {depositError}
-          </div>
+          <div style={{ color: '#ff4444', fontSize: '13px', marginTop: '8px' }}>{depositError}</div>
         )}
         {depositTx && (
           <div style={{ fontSize: '13px', marginTop: '8px', color: '#22c55e' }}>
             Deposited:{' '}
-            <a
-              href={SUBSCAN_TX + depositTx}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: '#22c55e' }}
-            >
-              View on Subscan
+            <a href={EXPLORER_TX + depositTx} target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e' }}>
+              View on Explorer
             </a>
           </div>
         )}
@@ -263,12 +209,7 @@ export function DepositFlow() {
       {/* Section 3: Vault Position */}
       <div style={cardStyle}>
         <h3 style={{ margin: '0 0 16px', color: '#e91e8c' }}>Vault Position</h3>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '16px',
-          textAlign: 'center',
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', textAlign: 'center' }}>
           <div>
             <div style={{ color: '#888', fontSize: '13px', marginBottom: '4px' }}>Available</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold' }}>

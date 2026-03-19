@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, type Address } from 'viem';
 import { useWriteContract, useReadContract, usePublicClient } from 'wagmi';
 import { useContracts } from './useContracts';
 
@@ -11,16 +11,16 @@ export function useWrapDOT() {
   const { writeContractAsync } = useWriteContract();
 
   const [isLoading, setIsLoading] = useState(false);
-  const [txHash, setTxHash] = useState(null);
-  const [error, setError] = useState(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const wrap = useCallback(async (dotAmountStr) => {
+  const wrap = useCallback(async (dotAmountStr: string) => {
     setIsLoading(true);
     setTxHash(null);
     setError(null);
     try {
       const amount = parseUnits(dotAmountStr, DECIMALS);
-      const gasEst = await publicClient.estimateContractGas({
+      const gasEst = await publicClient!.estimateContractGas({
         address: wdot.address,
         abi: wdot.abi,
         functionName: 'deposit',
@@ -31,12 +31,14 @@ export function useWrapDOT() {
         abi: wdot.abi,
         functionName: 'deposit',
         value: amount,
-        gas: gasEst * 120n / 100n,
+        gas: (gasEst * 120n) / 100n,
       });
       setTxHash(hash);
       return hash;
-    } catch (err) {
-      setError(err.shortMessage || err.message);
+    } catch (err: unknown) {
+      const msg = (err as { shortMessage?: string; message?: string }).shortMessage
+        || (err as Error).message;
+      setError(msg);
       throw err;
     } finally {
       setIsLoading(false);
@@ -51,10 +53,10 @@ export function useUnwrapWDOT() {
   const { writeContractAsync } = useWriteContract();
 
   const [isLoading, setIsLoading] = useState(false);
-  const [txHash, setTxHash] = useState(null);
-  const [error, setError] = useState(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const unwrap = useCallback(async (wdotAmountStr) => {
+  const unwrap = useCallback(async (wdotAmountStr: string) => {
     setIsLoading(true);
     setTxHash(null);
     setError(null);
@@ -68,8 +70,10 @@ export function useUnwrapWDOT() {
       });
       setTxHash(hash);
       return hash;
-    } catch (err) {
-      setError(err.shortMessage || err.message);
+    } catch (err: unknown) {
+      const msg = (err as { shortMessage?: string; message?: string }).shortMessage
+        || (err as Error).message;
+      setError(msg);
       throw err;
     } finally {
       setIsLoading(false);
@@ -79,18 +83,18 @@ export function useUnwrapWDOT() {
   return { unwrap, isLoading, txHash, error };
 }
 
-export function useWDOTBalance(address) {
+export function useWDOTBalance(address: Address | undefined) {
   const { wdot } = useContracts();
 
   const { data: raw, refetch } = useReadContract({
     address: wdot.address,
     abi: wdot.abi,
     functionName: 'balanceOf',
-    args: [address],
+    args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
 
-  const value = raw ?? 0n;
+  const value = (raw as bigint) ?? 0n;
   const formatted = formatUnits(value, DECIMALS) + ' WDOT';
 
   return { raw: value, formatted, refetch };

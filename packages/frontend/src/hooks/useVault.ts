@@ -1,20 +1,22 @@
 import { useState, useCallback } from 'react';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, type Address } from 'viem';
 import { useWriteContract, useReadContract } from 'wagmi';
 import { useContracts } from './useContracts';
 
 const DECIMALS = 10;
 
+type DepositStep = 'idle' | 'approving' | 'depositing' | 'done';
+
 export function useDepositCollateral() {
   const { wdot, vault } = useContracts();
   const { writeContractAsync } = useWriteContract();
 
-  const [step, setStep] = useState('idle');
+  const [step, setStep] = useState<DepositStep>('idle');
   const [isLoading, setIsLoading] = useState(false);
-  const [txHash, setTxHash] = useState(null);
-  const [error, setError] = useState(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const deposit = useCallback(async (wdotAmountStr) => {
+  const deposit = useCallback(async (wdotAmountStr: string) => {
     setIsLoading(true);
     setTxHash(null);
     setError(null);
@@ -40,8 +42,10 @@ export function useDepositCollateral() {
       setTxHash(hash);
       setStep('done');
       return hash;
-    } catch (err) {
-      setError(err.shortMessage || err.message);
+    } catch (err: unknown) {
+      const msg = (err as { shortMessage?: string; message?: string }).shortMessage
+        || (err as Error).message;
+      setError(msg);
       setStep('idle');
       throw err;
     } finally {
@@ -57,10 +61,10 @@ export function useWithdrawCollateral() {
   const { writeContractAsync } = useWriteContract();
 
   const [isLoading, setIsLoading] = useState(false);
-  const [txHash, setTxHash] = useState(null);
-  const [error, setError] = useState(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const withdraw = useCallback(async (wdotAmountStr) => {
+  const withdraw = useCallback(async (wdotAmountStr: string) => {
     setIsLoading(true);
     setTxHash(null);
     setError(null);
@@ -74,8 +78,10 @@ export function useWithdrawCollateral() {
       });
       setTxHash(hash);
       return hash;
-    } catch (err) {
-      setError(err.shortMessage || err.message);
+    } catch (err: unknown) {
+      const msg = (err as { shortMessage?: string; message?: string }).shortMessage
+        || (err as Error).message;
+      setError(msg);
       throw err;
     } finally {
       setIsLoading(false);
@@ -85,14 +91,14 @@ export function useWithdrawCollateral() {
   return { withdraw, isLoading, txHash, error };
 }
 
-export function useCollateralBalances(address) {
+export function useCollateralBalances(address: Address | undefined) {
   const { vault } = useContracts();
 
   const { data: availableRaw, refetch: refetchAvailable } = useReadContract({
     address: vault.address,
     abi: vault.abi,
     functionName: 'getAvailableCollateral',
-    args: [address],
+    args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
 
@@ -100,12 +106,12 @@ export function useCollateralBalances(address) {
     address: vault.address,
     abi: vault.abi,
     functionName: 'getLockedCollateral',
-    args: [address],
+    args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
 
-  const available = availableRaw ?? 0n;
-  const locked = lockedRaw ?? 0n;
+  const available = (availableRaw as bigint) ?? 0n;
+  const locked = (lockedRaw as bigint) ?? 0n;
 
   const refetch = useCallback(() => {
     refetchAvailable();

@@ -58,6 +58,9 @@ export function RemittanceStatus() {
     async function fetchEvents() {
       setLoading(true);
       try {
+        const currentBlock = await publicClient!.getBlockNumber();
+        const fromBlock = currentBlock > 50000n ? currentBlock - 50000n : 0n;
+
         const logs = await publicClient!.getLogs({
           address: bridge.address,
           event: {
@@ -72,7 +75,7 @@ export function RemittanceStatus() {
             ],
           },
           args: { sender: address },
-          fromBlock: 0n,
+          fromBlock,
           toBlock: 'latest',
         });
 

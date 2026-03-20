@@ -30,19 +30,12 @@ export function useBorrow() {
       const chainId = BigInt(destChainId ?? 0);
       const recipient = recipientAddr || '0x0000000000000000000000000000000000000000';
 
-      const gasEst = await publicClient!.estimateContractGas({
-        address: pool.address,
-        abi: pool.abi,
-        functionName: 'borrow',
-        args: [usdcAmount, chainId, recipient],
-      });
-
       const hash = await writeContractAsync({
         address: pool.address,
         abi: pool.abi,
         functionName: 'borrow',
         args: [usdcAmount, chainId, recipient],
-        gas: (gasEst * 120n) / 100n,
+        gas: 500_000n,
       });
       setTxHash(hash);
       return hash;

@@ -96,9 +96,10 @@ export function BorrowPanel() {
   const previewHf = useMemo(() => {
     if (!inputUsdc || inputUsdc <= 0 || !dotPriceWad || !available.raw) return null;
     const collUsdWad = (available.raw * (dotPriceWad as bigint)) / (10n ** 10n);
-    const debtUsdWad = BigInt(Math.floor(inputUsdc * 1e18));
+    const debtUsdWad = BigInt(Math.floor(inputUsdc * 1e6)) * (10n ** 12n);
     if (debtUsdWad === 0n) return null;
-    const hf = (collUsdWad * 13000n) / (debtUsdWad * 10000n);
+    const WAD = 10n ** 18n;
+    const hf = (collUsdWad * 13000n * WAD) / (debtUsdWad * 10000n);
     const hfNum = Number(hf) / 1e18;
     let status: HealthStatus;
     if (hfNum >= 1.5) status = 'safe';

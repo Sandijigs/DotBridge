@@ -7,7 +7,7 @@ import { polkadotHubTestnet } from '../constants/chains';
 
 const config = getDefaultConfig({
   appName: 'DotBridge',
-  projectId: 'dotbridge-demo',
+  projectId: '6b87a3c69cbd8b52055d7aef763148d6',
   chains: [polkadotHubTestnet],
   transports: {
     [polkadotHubTestnet.id]: http(polkadotHubTestnet.rpcUrls.default.http[0]),

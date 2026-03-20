@@ -116,7 +116,20 @@ export function BorrowPanel() {
     try {
       const chain = remitEnabled ? destChainId : '0';
       const recip = remitEnabled ? recipient : '0x0000000000000000000000000000000000000000';
-      await borrow(usdcAmount, chain, recip);
+      const hash = await borrow(usdcAmount, chain, recip);
+      // Save remittance to localStorage for history display
+      if (remitEnabled && hash && destChainId && recipient) {
+        const key = `dotbridge_remittances_${address}`;
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        existing.unshift({
+          txHash: hash,
+          recipient,
+          usdcAmount: usdcAmount,
+          destChainId: destChainId,
+          timestamp: Date.now(),
+        });
+        localStorage.setItem(key, JSON.stringify(existing));
+      }
       setUsdcAmount('');
       refreshAll();
     } catch { /* hook manages error */ }
